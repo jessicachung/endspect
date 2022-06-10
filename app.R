@@ -1,8 +1,7 @@
-# TODO: add r^2
 # TODO: need to batch norm GEO samples
 
 library(shiny)
-library(shinyjs)
+# library(shinyjs)
 library(dplyr)
 library(DT)
 library(ggplot2)
@@ -14,7 +13,7 @@ load("data/data.RData")
 # Currently only use RWH data
 sample_df <- sample_df %>% filter(study == "rwh")
 
-cycle_plot <- function(dat, gene_name, plot_type="ggplot") {
+cycle_plot <- function(dat, title="", subtitle="", plot_type="ggplot") {
   if (plot_type == "ggplot") {
     size <- 1
   } else {
@@ -25,7 +24,8 @@ cycle_plot <- function(dat, gene_name, plot_type="ggplot") {
          aes(x=time, y=exprs)) +
     geom_point(size=size) +
     scale_x_continuous(breaks=seq(0, 100, by=10)) +
-    labs(title=gene_name, x="Cycle Time", y="Normalised Expression") +
+    labs(title=title, subtitle=subtitle,
+         x="Cycle Time", y="Normalised Expression") +
     theme_bw()
 }
 
@@ -144,7 +144,14 @@ ui <- fluidPage(
                                 br(),
                                 dataTableOutput("dt_high")
                        ), # End tabPanel Highest Expression
-                       selected="Rapid Change",
+                       tabPanel("Inspect Genes",
+                                br(),
+                                wellPanel(textOutput("inspect")),
+                                plotOutput("gg_inspect"),
+                                br(),
+                                dataTableOutput("dt_inspect")
+                       ), # End tabPanel Inspect Genes
+                       selected="Rapid Change"
            ) # End tabsetPanel
     ) # End column
   ) # End fluidRow
@@ -163,8 +170,10 @@ server <- function(input, output, session) {
     not_ab_samples = c(),
     rapid_df = NULL,
     high_df = NULL,
+    inspect_df = gene_info %>% arrange(desc(R2)),
     rapid_selected_gene = "ENSG00000184502",
     high_selected_gene = "ENSG00000145832",
+    inspect_selected_gene = "ENSG00000197442"
   )
 
   # observeEvent({input$select_input_method;
@@ -281,29 +290,38 @@ server <- function(input, output, session) {
     rownames(rv$rapid_df) <- NULL
     rownames(rv$high_df) <- NULL
 
-    rv$rapid_selected_gene <- rv$rapid_df %>% pull(ensembl_id) %>% head(1)
-    rv$high_selected_gene <- rv$high_df %>% pull(ensembl_id) %>% head(1)
+    rv$rapid_selected_gene <- rv$rapid_df %>% pull(ensembl_id) %>% head(1) %>% as.character()
+    rv$high_selected_gene <- rv$high_df %>% pull(ensembl_id) %>% head(1) %>% as.character()
 
   })
 
   # Update selected gene when row is clicked
   observeEvent({input$dt_rapid_change_cell_clicked}, {
     if (!is.null(input$dt_rapid_change_cell_clicked$row)) {
-      rv$rapid_selected_gene <- rv$rapid_df[input$dt_rapid_change_cell_clicked$row, "ensembl_id"]
+      rv$rapid_selected_gene <- as.character(rv$rapid_df[input$dt_rapid_change_cell_clicked$row, "ensembl_id"])
       if (debug) message(sprintf("Rapid df row clicked: %d (%s)",
                                  input$dt_rapid_change_cell_clicked$row,
                                  rv$rapid_selected_gene))
     }
   })
 
-
   # Update selected gene when row is clicked
   observeEvent({input$dt_high_cell_clicked}, {
     if (!is.null(input$dt_high_cell_clicked$row)) {
-      rv$high_selected_gene <- rv$high_df[input$dt_high_cell_clicked$row, "ensembl_id"]
+      rv$high_selected_gene <- as.character(rv$high_df[input$dt_high_cell_clicked$row, "ensembl_id"])
       if (debug) message(sprintf("High df row clicked: %d (%s)",
                                  input$dt_high_cell_clicked$row,
                                  rv$high_selected_gene))
+    }
+  })
+
+  # Update selected gene when row is clicked
+  observeEvent({input$dt_inspect_cell_clicked}, {
+    if (!is.null(input$dt_inspect_cell_clicked$row)) {
+      rv$inspect_selected_gene <- as.character(rv$inspect_df[input$dt_inspect_cell_clicked$row, "ensembl_id"])
+      if (debug) message(sprintf("Inspect df row clicked: %d (%s)",
+                                 input$dt_inspect_cell_clicked$row,
+                                 rv$inspect_selected_gene))
     }
   })
 
@@ -315,7 +333,9 @@ server <- function(input, output, session) {
     }
     dat <- sample_df %>%
       mutate(exprs=exprs[rv$rapid_selected_gene, sample_id])
-    cycle_plot(dat=dat, gene_name=rv$rapid_selected_gene) +
+    x <- gene_info %>% filter(ensembl_id == rv$rapid_selected_gene)
+    cycle_plot(dat=dat, title=sprintf("%s (%s)", x$symbol, x$ensembl_id),
+               subtitle=ifelse(is.na(x$gene_name), "", x$gene_name)) +
       geom_vline(xintercept=midpoint,
                  linetype="dashed",
                  color="red")
@@ -323,20 +343,30 @@ server <- function(input, output, session) {
   output$gg_high <- renderPlot({
     dat <- sample_df %>%
       mutate(exprs=exprs[rv$high_selected_gene, sample_id])
+    x <- gene_info %>% filter(ensembl_id == rv$high_selected_gene)
+    g <- cycle_plot(dat=dat, title=sprintf("%s (%s)", x$symbol, x$ensembl_id),
+                    subtitle=ifelse(is.na(x$gene_name), "", x$gene_name))
 
     if (rv$b[2] > rv$a[1]) {
-      cycle_plot(dat=dat, gene_name=rv$high_selected_gene) +
+      g +
         annotate("rect", xmin = rv$a[1], xmax = rv$b[2], ymin = Inf, ymax = -Inf,
                  fill="red", alpha = .2)
     } else {
-      cycle_plot(dat=dat, gene_name=rv$high_selected_gene) +
+      g +
         annotate("rect", xmin = 0, xmax = rv$b[2], ymin = Inf, ymax = -Inf,
                  fill="red", alpha = .2) +
         annotate("rect", xmin = rv$a[1], xmax = 100, ymin = Inf, ymax = -Inf,
                  fill="red", alpha = .2)
     }
-
   })
+  output$gg_inspect <- renderPlot({
+    dat <- sample_df %>%
+      mutate(exprs=exprs[rv$inspect_selected_gene, sample_id])
+    x <- gene_info %>% filter(ensembl_id == rv$inspect_selected_gene)
+    cycle_plot(dat=dat, title=sprintf("%s (%s)", x$symbol, x$ensembl_id),
+               subtitle=ifelse(is.na(x$gene_name), "", x$gene_name))
+  })
+
 
   output$dt_rapid_change <- renderDataTable({
     datatable(rv$rapid_df %>% select(ensembl_id, diff, entrez_id, symbol, gene_name),
@@ -350,6 +380,11 @@ server <- function(input, output, session) {
               selection="single")
   })
 
+  output$dt_inspect <- renderDataTable({
+    datatable(rv$inspect_df %>% select(ensembl_id, R2, dev_exp, edf, entrez_id, symbol, gene_name),
+              options=list(pageLength=5),
+              selection="single")
+  })
 
   output$rapid_text <- renderText({
     x <- c(rv$a[1], rv$a[2], rv$b[1], rv$b[2])
