@@ -1,14 +1,10 @@
-# TODO: need to batch norm GEO samples
-
 library(shiny)
-# library(shinyjs)
 library(dplyr)
 library(DT)
 library(ggplot2)
 
 debug <- TRUE
 load("data/data.RData")
-
 
 # Currently only use RWH data
 sample_df <- sample_df %>% filter(study == "rwh")
@@ -105,19 +101,19 @@ ui <- fluidPage(
 
       actionButton("submit_button", "Set region"),
 
-      br(), hr(), br(),
-
-      selectInput("advanced_options",
-                  label="Advanced Options",
-                  choices=list("Hide advanced options" = "hide_options",
-                               "Show advanced options" = "show_options"),
-                  selected="hide_options"),
-
-      conditionalPanel("input.advanced_options == 'show_options'",
-                       checkboxInput("show_p_values",
-                                     "Show p-values for rapidly changing genes t-tests",
-                                      value=FALSE)
-      ) # End conditionalPanel (show_options)
+      # br(), hr(), br(),
+      #
+      # selectInput("advanced_options",
+      #             label="Advanced Options",
+      #             choices=list("Hide advanced options" = "hide_options",
+      #                          "Show advanced options" = "show_options"),
+      #             selected="hide_options"),
+      #
+      # conditionalPanel("input.advanced_options == 'show_options'",
+      #                  checkboxInput("show_p_values",
+      #                                "Show p-values for rapidly changing genes t-tests",
+      #                                 value=FALSE)
+      # ) # End conditionalPanel (show_options)
 
 
 
@@ -128,7 +124,13 @@ ui <- fluidPage(
            tabsetPanel(type = "tabs",
                        tabPanel("README",
                                 br(),
-                                wellPanel("#TODO: Write documentation")
+                                wellPanel(h4(strong("endspect")),
+                                p("An app written in R Shiny for exploring gene expression changes throughout the menstrual cycle. This app uses RNA-seq data from 266 endometrial biopsy samples collected from the Royal Women's Hospital. Cycle times were estimated using the",
+                                  HTML('<a href="https://github.com/jessicachung/endest", target="_blank">endest</a>'), "R package."),
+                                p("The", strong("Rapid Change"), "tab shows genes that rapidly change across a given time point in the menstrual cycle."),
+                                p("The", strong("Highest Expression"), "tab shows genes that have relatively high expression in a given time period. You can get the lowest expression genes by sorting the 'diff' column in ascending order."),
+                                p("The", strong("Inspect Genes"), "tab lists genes by how well gene expression explains the variance observed", HTML("(R<sup>2</sup>)."), "The 'edf' column (effective degrees of freedom) also gives an idea of how wibbly-wobbly the gene expression is.")
+                                )
                        ), # End tabPanel README
                        tabPanel("Rapid Change",
                                 br(),
@@ -146,7 +148,7 @@ ui <- fluidPage(
                        ), # End tabPanel Highest Expression
                        tabPanel("Inspect Genes",
                                 br(),
-                                wellPanel(textOutput("inspect")),
+                                wellPanel("Click on a gene in the table below to display its gene expression across the menstrual cycle."),
                                 plotOutput("gg_inspect"),
                                 br(),
                                 dataTableOutput("dt_inspect")
@@ -176,12 +178,8 @@ server <- function(input, output, session) {
     inspect_selected_gene = "ENSG00000197442"
   )
 
-  # observeEvent({input$select_input_method;
-  #   input$slider_cycle_region_midpoint_1; input$slider_cycle_region_midpoint_2; input$slider_cycle_region_midpoint_w;
-  #   input$numeric_window_size;
-
   observeEvent({input$submit_button
-    }, {
+  }, {
 
     if (input$select_input_method == "input_slider") {
       midpoint <- input$slider_cycle_region_midpoint
