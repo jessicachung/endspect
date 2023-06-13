@@ -129,7 +129,7 @@ ui <- fluidPage(
                                   HTML('<a href="https://github.com/jessicachung/endest", target="_blank">endest</a>'), "R package."),
                                 p("The", strong("Rapid Change"), "tab shows genes that rapidly change across a given time point in the menstrual cycle."),
                                 p("The", strong("Highest Expression"), "tab shows genes that have relatively high expression in a given time period. You can get the lowest expression genes by sorting the 'diff' column in ascending order."),
-                                p("The", strong("Inspect Genes"), "tab lists genes by how well gene expression explains the variance observed", HTML("(R<sup>2</sup>)."), "The 'edf' column (effective degrees of freedom) also gives an idea of how wibbly-wobbly the gene expression is.")
+                                p("The", strong("Inspect Genes"), "tab lists genes by how well cycle time explains the variance observed in gene expression", HTML("(R<sup>2</sup>)."), "The 'edf' column (effective degrees of freedom) also gives an idea of the extent gene expression fluctuates in the cycle.")
                                 )
                        ), # End tabPanel README
                        tabPanel("Rapid Change",
