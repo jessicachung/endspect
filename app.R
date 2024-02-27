@@ -33,6 +33,8 @@ ui <- fluidPage(
 
   br(), br(),
 
+  #### Settings Pane ####
+
   fluidRow(
     column(4, wellPanel(
       h4("Settings:"),
@@ -99,6 +101,38 @@ ui <- fluidPage(
                        ),
       ), # End conditionalPanel (input_manual)
 
+
+      # Advanced options:
+      selectInput("select_advanced",
+                  label=h5("Advanced options:"),
+                  choices=list(
+                    "Show advanced options" = "show",
+                    "Hide advanced options" = "hide"
+                  ),
+                  selected="hide"
+      ), # End select_advanced
+
+      conditionalPanel("input.select_advanced == 'show'",
+                       wellPanel(
+                         checkboxInput("rapid_changes_shade_region",
+                                       label="[Rapid Change] Shade selected region",
+                                       value=FALSE
+                         ),
+                         checkboxInput("show_rapid_changes_pval",
+                                       label="[Rapid Change] Show t-test P-value column",
+                                       value=FALSE
+                         ),
+                         checkboxInput("show_inspect_genes_dev_exp",
+                                       label="[Inspect Genes] Show deviance explained column",
+                                       value=FALSE
+                         ),
+                         style="background: #fbfbfb"
+                       ),
+
+      ), # End conditionalPanel (select_advanced == 'show')
+
+
+
       actionButton("submit_button", "Set region"),
 
       # br(), hr(), br(),
@@ -119,6 +153,9 @@ ui <- fluidPage(
 
     ) # End wellPanel
     ), # End column
+
+
+    #### UI Panels ####
 
     column(width=7, offset=0,
            tabsetPanel(type = "tabs",
@@ -160,7 +197,7 @@ ui <- fluidPage(
 ) # End fluidPage
 
 
-
+#### Server ####
 
 server <- function(input, output, session) {
   rv <- reactiveValues(
@@ -332,12 +369,29 @@ server <- function(input, output, session) {
     dat <- sample_df %>%
       mutate(exprs=exprs[rv$rapid_selected_gene, sample_id])
     x <- gene_info %>% filter(ensembl_id == rv$rapid_selected_gene)
-    cycle_plot(dat=dat, title=sprintf("%s (%s)", x$symbol, x$ensembl_id),
-               subtitle=ifelse(is.na(x$gene_name), "", x$gene_name)) +
+    g <- cycle_plot(dat=dat, title=sprintf("%s (%s)", x$symbol, x$ensembl_id),
+                    subtitle=ifelse(is.na(x$gene_name), "", x$gene_name)) +
       geom_vline(xintercept=midpoint,
                  linetype="dashed",
                  color="red")
+
+    if (input$rapid_changes_shade_region) {
+      if (rv$b[2] > rv$a[1]) {
+        g +
+          annotate("rect", xmin = rv$a[1], xmax = rv$b[2], ymin = Inf, ymax = -Inf,
+                   fill="red", alpha = .2)
+      } else {
+        g +
+          annotate("rect", xmin = 0, xmax = rv$b[2], ymin = Inf, ymax = -Inf,
+                   fill="red", alpha = .2) +
+          annotate("rect", xmin = rv$a[1], xmax = 100, ymin = Inf, ymax = -Inf,
+                   fill="red", alpha = .2)
+      }
+    } else {
+      g
+    }
   })
+
   output$gg_high <- renderPlot({
     dat <- sample_df %>%
       mutate(exprs=exprs[rv$high_selected_gene, sample_id])
@@ -357,6 +411,7 @@ server <- function(input, output, session) {
                  fill="red", alpha = .2)
     }
   })
+
   output$gg_inspect <- renderPlot({
     dat <- sample_df %>%
       mutate(exprs=exprs[rv$inspect_selected_gene, sample_id])
@@ -367,7 +422,14 @@ server <- function(input, output, session) {
 
 
   output$dt_rapid_change <- renderDataTable({
-    datatable(rv$rapid_df %>% select(ensembl_id, diff, entrez_id, symbol, gene_name),
+    if (input$show_rapid_changes_pval) {
+      show_cols <- c("ensembl_id", "diff", "p.value", "entrez_id", "symbol", "gene_name")
+    } else {
+      show_cols <- c("ensembl_id", "diff", "entrez_id", "symbol", "gene_name")
+    }
+    datatable(rv$rapid_df %>%
+                mutate(p.value=as.numeric(format(p.value, digits=3))) %>%
+                select(all_of(show_cols)),
               options=list(pageLength=5),
               selection="single")
   })
@@ -379,7 +441,12 @@ server <- function(input, output, session) {
   })
 
   output$dt_inspect <- renderDataTable({
-    datatable(rv$inspect_df %>% select(ensembl_id, R2, dev_exp, edf, entrez_id, symbol, gene_name),
+    if (input$show_inspect_genes_dev_exp) {
+      show_cols <- c("ensembl_id", "R2", "dev_exp", "edf", "entrez_id", "symbol", "gene_name")
+    } else {
+      show_cols <- c("ensembl_id", "R2", "edf", "entrez_id", "symbol", "gene_name")
+    }
+    datatable(rv$inspect_df %>% select(all_of(show_cols)),
               options=list(pageLength=5),
               selection="single")
   })
